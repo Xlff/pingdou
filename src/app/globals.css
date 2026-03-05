@@ -1,23 +1,106 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d2e;
-  --surface2: #22263a;
-  --border: rgba(255,255,255,0.08);
+  --bg:           #0f1117;
+  --surface:      #1a1d2e;
+  --surface2:     #22263a;
+  --border:       rgba(255,255,255,0.08);
   --border-hover: rgba(255,255,255,0.15);
-  --text: #e8eaf0;
-  --text-muted: #6b7280;
-  --text-dim: #9ca3af;
-  --accent: #7c6bff;
-  --accent-glow: rgba(124,107,255,0.2);
+  --text:         #e8eaf0;
+  --text-muted:   #6b7280;
+  --text-dim:     #9ca3af;
+  --accent:       #7c6bff;
+  --accent-glow:  rgba(124,107,255,0.2);
+  --bottom-nav-h: 56px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
 html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); }
 
-::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+/* ── 响应式布局 ───────────────────────────────────────── */
+
+.app           { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+.app-header    { height:52px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 16px; border-bottom:1px solid var(--border); background:var(--surface); }
+.app-body      { flex:1; display:flex; overflow:hidden; }
+
+/* 桌面侧边栏 */
+.sidebar       { width:272px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; overflow:hidden; }
+
+/* 预览主区 */
+.preview-area  { flex:1; overflow:auto; background:repeating-conic-gradient(rgba(255,255,255,0.03) 0% 25%,transparent 0% 50%) 0 0/20px 20px; padding:20px; display:flex; align-items:flex-start; justify-content:flex-start; }
+
+/* 移动端底部导航（默认隐藏） */
+.mobile-nav    { display:none; }
+
+/* 颜色统计覆盖层（桌面端隐藏，仅移动端用） */
+.color-panel   { display:none; }
+
+/* ── 移动端（≤640px）────────────────────────────────── */
+@media (max-width: 640px) {
+  .app-header  { height:48px; padding:0 12px; }
+  .app-body    { position:relative; }
+
+  /* 侧边栏变全屏覆盖层 */
+  .sidebar {
+    position:absolute; inset:0 0 0 0;
+    width:100%; border-right:none;
+    z-index:10; transform:translateX(-100%);
+    transition:transform 0.25s ease;
+    background:var(--bg);
+  }
+  .sidebar.mobile-open { transform:translateX(0); }
+
+  /* 颜色统计面板（单独覆盖层） */
+  .color-panel {
+    position:absolute; inset:0 0 0 0;
+    z-index:10; background:var(--bg);
+    transform:translateX(100%);
+    transition:transform 0.25s ease;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .color-panel.mobile-open { transform:translateX(0); }
+
+  /* 移动端显示 color-panel */
+  .color-panel {
+    display:flex;
+    position:absolute; inset:0 0 0 0;
+    z-index:10; background:var(--bg);
+    transform:translateX(100%);
+    transition:transform 0.25s ease;
+    flex-direction:column; overflow:hidden;
+  }
+
+  /* 预览区：居中，允许滚动 */
+  .preview-area { padding:12px; align-items:center; justify-content:center; }
+
+  /* Canvas 自适应屏幕宽度，保持像素锐利 */
+  .preview-area canvas {
+    max-width: calc(100vw - 24px);
+    height: auto;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  /* 底部导航 */
+  .mobile-nav {
+    display:flex; height:var(--bottom-nav-h); flex-shrink:0;
+    border-top:1px solid var(--border); background:var(--surface);
+  }
+  .mobile-nav button {
+    flex:1; border:none; background:none; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:3px; font-size:10px; color:var(--text-muted); transition:color 0.15s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .mobile-nav button.active { color:var(--accent); }
+  .mobile-nav button svg   { opacity:0.7; }
+  .mobile-nav button.active svg { opacity:1; }
+
+  .header-summary { display:none; }
+}
+
