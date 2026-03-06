@@ -87,6 +87,8 @@ export default function HomePage() {
   const [showGrid, setShowGrid] = useState(true);
   const [cellSize, setCellSize] = useState(10);
   const [isDragging, setIsDragging] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportWithDetails, setExportWithDetails] = useState(true);
   const [desktopTab, setDesktopTab] = useState<"settings" | "colors">("settings");
   const [mobileTab, setMobileTab] = useState<MobileTab>("preview");
 
@@ -138,10 +140,170 @@ export default function HomePage() {
   };
 
   const exportPNG = () => {
-    if (!canvasRef.current) return;
-    const a = document.createElement("a");
-    a.download = `bead-${gridW}x${gridH}.png`;
-    a.href = canvasRef.current.toDataURL("image/png"); a.click();
+    if (!imageData || colorStats.length === 0) return;
+    setIsExporting(true);
+    setTimeout(() => {
+      try {
+        const { width: W, height: H, data } = imageData;
+        const EXPORT_CELL = 26;
+
+        if (!exportWithDetails) {
+          const rawCanvas = document.createElement("canvas");
+          renderBeadCanvas(rawCanvas, imageData, EXPORT_CELL, false);
+          const a = document.createElement("a");
+          a.download = `bead-pattern-${W}x${H}.png`;
+          a.href = rawCanvas.toDataURL("image/png");
+          a.click();
+          return;
+        }
+
+        const PAD_X = 60, PAD_TOP = 120, PAD_BOT = 60;
+        const gridW_px = W * EXPORT_CELL;
+        const gridH_px = H * EXPORT_CELL;
+
+        const LEGEND_ITEM_W = 200;
+        const LEGEND_ITEM_H = 36;
+        const CANVAS_W = Math.max(800, PAD_X * 2 + gridW_px);
+        const LEGEND_COLS = Math.max(1, Math.floor((CANVAS_W - PAD_X * 2) / LEGEND_ITEM_W));
+        const LEGEND_ROWS = Math.ceil(colorStats.length / LEGEND_COLS);
+        const LEGEND_H = 60 + LEGEND_ROWS * LEGEND_ITEM_H;
+        const CANVAS_H = PAD_TOP + gridH_px + PAD_BOT + LEGEND_H;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = CANVAS_W;
+        canvas.height = CANVAS_H;
+        const ctx = canvas.getContext("2d")!;
+
+        // 1. Fill background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+        // 2. Title & summary
+        ctx.fillStyle = "#111827";
+        ctx.font = "bold 32px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("拼豆图纸", CANVAS_W / 2, 45);
+
+        ctx.font = "15px sans-serif";
+        ctx.fillStyle = "#6b7280";
+        ctx.fillText(`尺寸: ${W} × ${H}   |   颜色: ${colorStats.length} 种   |   总豆数: ${(W * H).toLocaleString()}`, CANVAS_W / 2, 85);
+
+        // 3. Draw grid and cells
+        const colorMap = new Map<string, number>();
+        colorStats.forEach((c, idx) => colorMap.set(c.hex, idx + 1));
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const i = (y * W + x) * 4;
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+            const hex = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+            const num = colorMap.get(hex);
+
+            const px = PAD_X + x * EXPORT_CELL;
+            const py = PAD_TOP + y * EXPORT_CELL;
+
+            // Cell bg
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(px, py, EXPORT_CELL, EXPORT_CELL);
+
+            // Bead
+            ctx.fillStyle = `rgb(${Math.min(255, r + 18)},${Math.min(255, g + 18)},${Math.min(255, b + 18)})`;
+            ctx.beginPath();
+            ctx.arc(px + EXPORT_CELL / 2, py + EXPORT_CELL / 2, EXPORT_CELL * 0.42, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255,255,255,0.2)";
+            ctx.beginPath();
+            ctx.arc(px + EXPORT_CELL * 0.35, py + EXPORT_CELL * 0.35, EXPORT_CELL * 0.12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Index Text
+            const bright = getBrightness(r, g, b);
+            ctx.fillStyle = bright > 130 ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.95)";
+            ctx.font = "bold 12px sans-serif";
+            ctx.fillText(num?.toString() || "", px + EXPORT_CELL / 2, py + EXPORT_CELL / 2 + 1);
+          }
+        }
+
+        // 4. Grid lines
+        for (let x = 0; x <= W; x++) {
+          ctx.lineWidth = x % 10 === 0 ? 1.5 : x % 5 === 0 ? 1 : 0.5;
+          ctx.strokeStyle = x % 10 === 0 ? "rgba(0,0,0,0.6)" : x % 5 === 0 ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.15)";
+          ctx.beginPath(); ctx.moveTo(PAD_X + x * EXPORT_CELL, PAD_TOP); ctx.lineTo(PAD_X + x * EXPORT_CELL, PAD_TOP + gridH_px); ctx.stroke();
+        }
+        for (let y = 0; y <= H; y++) {
+          ctx.lineWidth = y % 10 === 0 ? 1.5 : y % 5 === 0 ? 1 : 0.5;
+          ctx.strokeStyle = y % 10 === 0 ? "rgba(0,0,0,0.6)" : y % 5 === 0 ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.15)";
+          ctx.beginPath(); ctx.moveTo(PAD_X, PAD_TOP + y * EXPORT_CELL); ctx.lineTo(PAD_X + gridW_px, PAD_TOP + y * EXPORT_CELL); ctx.stroke();
+        }
+
+        // 5. Grid Coordinates
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "12px sans-serif";
+        for (let x = 0; x < W; x++) {
+          if (x % 5 === 0 || x === W - 1) {
+            ctx.fillText((x + 1).toString(), PAD_X + x * EXPORT_CELL + EXPORT_CELL / 2, PAD_TOP - 12);
+          }
+        }
+        for (let y = 0; y < H; y++) {
+          if (y % 5 === 0 || y === H - 1) {
+            ctx.fillText((y + 1).toString(), PAD_X - 16, PAD_TOP + y * EXPORT_CELL + EXPORT_CELL / 2 + 1);
+          }
+        }
+
+        // 6. Legend
+        const legendY = PAD_TOP + gridH_px + PAD_BOT;
+        ctx.fillStyle = "#111827";
+        ctx.font = "bold 20px sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("颜色详情对照表", PAD_X, legendY);
+
+        const itemsY = legendY + 30;
+        ctx.textBaseline = "middle";
+
+        colorStats.forEach((c, idx) => {
+          const col = idx % LEGEND_COLS;
+          const row = Math.floor(idx / LEGEND_COLS);
+          const lx = PAD_X + col * LEGEND_ITEM_W;
+          const ly = itemsY + row * LEGEND_ITEM_H;
+
+          ctx.fillStyle = "#f3f4f6";
+          ctx.beginPath(); ctx.arc(lx + 12, ly + 14, 11, 0, Math.PI * 2); ctx.fill();
+
+          ctx.fillStyle = "#374151";
+          ctx.font = "bold 11px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText((idx + 1).toString(), lx + 12, ly + 15);
+
+          ctx.fillStyle = c.hex;
+          ctx.fillRect(lx + 32, ly + 4, 20, 20);
+          ctx.strokeStyle = "rgba(0,0,0,0.1)";
+          ctx.strokeRect(lx + 32, ly + 4, 20, 20);
+
+          ctx.fillStyle = "#111827";
+          ctx.textAlign = "left";
+          ctx.font = "13px sans-serif";
+          ctx.fillText(c.zhName, lx + 60, ly + 15);
+
+          ctx.fillStyle = "#6b7280";
+          ctx.font = "12px monospace";
+          ctx.fillText(`${c.count} 颗`, lx + 130, ly + 15);
+        });
+
+        const a = document.createElement("a");
+        a.download = `bead-pattern-${W}x${H}.png`;
+        a.href = canvas.toDataURL("image/png");
+        a.click();
+      } catch (err) {
+        console.error("Export failed:", err);
+        alert("导出遇到问题，图片可能过大");
+      } finally {
+        setIsExporting(false);
+      }
+    }, 50);
   };
 
   // ── 样式辅助 ──
@@ -188,6 +350,15 @@ export default function HomePage() {
           </div>
         ))}
         <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center" }}>共 {(gridW * gridH).toLocaleString()} 颗</p>
+      </div>
+
+      {/* 图纸导出 */}
+      <div>
+        <p style={S.label}>导出选项</p>
+        <label style={{ ...S.card, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
+          <input type="checkbox" checked={exportWithDetails} onChange={(e) => setExportWithDetails(e.target.checked)} style={{ accentColor: "var(--accent)", width: 14, height: 14 }} />
+          <span style={{ fontSize: 13 }}>附带坐标位置与颜色详情表</span>
+        </label>
       </div>
 
       {/* 显示选项 */}
@@ -293,8 +464,8 @@ export default function HomePage() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {image && <span className="header-summary" style={{ fontSize: 12, color: "var(--text-muted)" }}>{gridW}×{gridH} · {colorStats.length} 色</span>}
           {image && (
-            <button onClick={exportPNG} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-              {Icons.download} 导出
+            <button onClick={exportPNG} disabled={isExporting} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 8, border: "none", background: isExporting ? "var(--border-hover)" : "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: isExporting ? "not-allowed" : "pointer" }}>
+              {isExporting ? "⏳ 导出中..." : <>{Icons.download} 导出图纸</>}
             </button>
           )}
         </div>
